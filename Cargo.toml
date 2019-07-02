@@ -1,0 +1,18 @@
+[package]
+name = "scientific-paper-images-annotations"
+version = "0.1.0"
+authors = ["Maximilian Goisser <goisser94@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+poppler = "=0.2.4"
+cairo-rs = "0.3.0"
+serde = { version = "1.0.94", features = ["derive"] }
+runtime = "0.3.0-alpha.6"
+actix-web = "1.0.3"
+futures-preview = "0.3.0-alpha.16"
+clap = "2.33.0"
+serde_json = "1.0.40"
+
+[build-dependencies]
+schemafy = "0.4.5"

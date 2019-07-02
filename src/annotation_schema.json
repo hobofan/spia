@@ -1,0 +1,30 @@
+{
+  "description": "An address similar to http://microformats.org/wiki/h-card",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "object",
+            "properties": {
+              "download_url": {
+                "type": "string"
+              },
+              "download_checksum_sha256": {
+                "type": "string"
+              }
+            },
+            "required": [ "download_url" ]
+          }
+        }
+      }
+    }
+  },
+  "required": [ "version", "annotations" ]
+}
