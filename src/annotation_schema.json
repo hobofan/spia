@@ -16,13 +16,14 @@
               "download_url": {
                 "type": "string"
               },
-              "download_checksum_sha256": {
+              "download_checksum_sha3_256": {
                 "type": "string"
               }
             },
             "required": [ "download_url" ]
           }
-        }
+        },
+        "required": [ "subject" ]
       }
     }
   },

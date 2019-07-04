@@ -1,13 +1,26 @@
 #![feature(async_await)]
 
-mod schema;
+#[macro_use]
+extern crate log;
 
-use actix_web::{http, web, web::Path, App, HttpRequest, HttpServer, Responder};
+mod schema;
+mod schema_impl;
+
+use actix_web::{
+    web::{self, Path},
+    App, HttpRequest, HttpServer, Responder,
+};
 use clap::{App as ClapApp, Arg, SubCommand};
-use futures::compat::Compat;
+use futures::compat::Compat01As03;
+use reqwest::Client;
+use rustc_hex::ToHex;
 use std::fs::File;
 use std::io::BufReader;
-use std::time::{Duration, Instant};
+use std::io::Write;
+use std::path::PathBuf;
+use tiny_keccak::sha3_256;
+
+use schema::PaperAnnotations;
 
 fn placeholder() {
     let args = std::env::args().collect::<Vec<_>>();
@@ -51,27 +64,89 @@ fn read_input_file(path: &str) -> schema::PaperAnnotations {
     serde_json::from_reader(reader).unwrap()
 }
 
+fn download_papers(in_file: &mut PaperAnnotations, data_dir: &str) {
+    let client = Client::new();
+    for annotation_group in &mut in_file.annotations {
+        if annotation_group.subject.is_downloaded(data_dir, None) {
+            continue;
+        }
+
+        let download_url = &annotation_group.subject.download_url;
+
+        let mut resp = client.get(download_url).send().unwrap();
+        let mut buf: Vec<u8> = vec![];
+        resp.copy_to(&mut buf).unwrap();
+
+        let hash = sha3_256(&buf);
+        let hash_str: String = hash.to_hex();
+        if annotation_group.subject.verify_download_checksum(&hash_str) {
+            info!("Invalid hash for download at URL {:?}", download_url);
+            continue;
+        }
+
+        let target_path = annotation_group
+            .subject
+            .download_target_path(data_dir, Some(&hash_str))
+            .unwrap();
+
+        info!(
+            "downloaded {:?} with hash {}, to path {:?}",
+            download_url, hash_str, target_path
+        );
+        let mut file = File::create(target_path).unwrap();
+        file.write_all(&buf).unwrap();
+
+        annotation_group.subject.download_checksum_sha_3_256 = Some(hash_str);
+    }
+
+    print!("{}", serde_json::to_string_pretty(in_file).unwrap());
+}
+
 #[runtime::main]
 async fn main() -> () {
+    env_logger::init();
+
     let matches = ClapApp::new("spia")
-        .arg(
-            Arg::with_name("input")
-                .long("input")
-                .value_name("FILE")
-                .help("Sets a input file")
-                .takes_value(true),
+        .subcommand(
+            SubCommand::with_name("check").arg(
+                Arg::with_name("input")
+                    .long("input")
+                    .value_name("FILE")
+                    .help("Sets a input file")
+                    .takes_value(true),
+            ),
         )
-        .arg(
-            Arg::with_name("data-dir")
-                .long("data-dir")
-                .value_name("DIR")
-                .help("Sets a data directory")
-                .takes_value(true),
+        .subcommand(
+            SubCommand::with_name("server")
+                .arg(
+                    Arg::with_name("input")
+                        .long("input")
+                        .value_name("FILE")
+                        .help("Sets a input file")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("data-dir")
+                        .long("data-dir")
+                        .value_name("DIR")
+                        .help("Sets a data directory")
+                        .takes_value(true),
+                ),
         )
         .get_matches();
 
-    async {
-        run_server();
+    if let Some(matches) = matches.subcommand_matches("check") {
+        let mut input_file = read_input_file(matches.value_of("input").unwrap());
+        download_papers(
+            &mut input_file,
+            "/Users/hobofan/stuff/scientific-paper-images-annotations/data",
+        );
     }
-        .await
+    if let Some(matches) = matches.subcommand_matches("server") {
+        let input_file = read_input_file(matches.value_of("input").unwrap());
+        async {
+            run_server();
+        }
+            .await
+    }
 }

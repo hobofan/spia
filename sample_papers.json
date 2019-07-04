@@ -1,0 +1,35 @@
+{
+  "version": "1",
+  "annotations": [
+    {
+      "subject": {
+        "download_url": "http://www.semantic-web-journal.net/sites/default/files/swj120_2.pdf"
+      }
+    },
+    {
+      "subject": {
+        "download_url": "https://repository.lib.ncsu.edu/bitstream/handle/1840.4/2170/ISMS_1962_326.pdf"
+      }
+    },
+    {
+      "subject": {
+        "download_url": "http://oa.upm.es/5678/1/Workshop14.SWDB2004.pdf"
+      }
+    },
+    {
+      "subject": {
+        "download_url": "https://link.springer.com/content/pdf/10.1007/11574620_39.pdf"
+      }
+    },
+    {
+      "subject": {
+        "download_url": "https://link.springer.com/content/pdf/10.1007/978-3-540-76298-0_9.pdf"
+      }
+    },
+    {
+      "subject": {
+        "download_url": "http://test2010le2i.u-bourgogne.fr/le2i/IMG/publications/InterDB07-Ghawi.pdf"
+      }
+    }
+  ]
+}
