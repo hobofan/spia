@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::schema::*;
+
+pub type PapersByHash = HashMap<String, PaperAnnotationsItemAnnotations>;
 
 impl PaperAnnotationsItemAnnotationsSubject {
     /// Returns the download target path for the subject file.
@@ -42,5 +45,18 @@ impl PaperAnnotationsItemAnnotationsSubject {
             None => true,
             Some(expected_hash) => expected_hash == hash,
         }
+    }
+}
+
+impl PaperAnnotations {
+    /// Create a lookup map hash->papers
+    pub fn papers_by_hash(&self) -> HashMap<String, PaperAnnotationsItemAnnotations> {
+        self.annotations
+            .iter()
+            .filter_map(|item| match &item.subject.download_checksum_sha_3_256 {
+                None => None,
+                Some(hash) => Some((hash.to_owned(), item.clone())),
+            })
+            .collect()
     }
 }
