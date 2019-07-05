@@ -7,8 +7,10 @@ mod schema;
 mod schema_impl;
 
 use actix_web::{
-    web::{self, Path},
-    App, HttpRequest, HttpServer, Responder,
+    http::header::{HeaderValue, CONTENT_TYPE},
+    http::StatusCode,
+    web::{self, Bytes, Path},
+    App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use clap::{App as ClapApp, Arg, SubCommand};
 use futures::compat::Compat01As03;
@@ -23,6 +25,12 @@ use tiny_keccak::sha3_256;
 
 use schema::PaperAnnotations;
 use schema_impl::PapersByHash;
+
+#[derive(Clone, Debug)]
+pub struct ServerState {
+    papers: PapersByHash,
+    data_dir: PathBuf,
+}
 
 fn placeholder() {
     let args = std::env::args().collect::<Vec<_>>();
@@ -50,17 +58,55 @@ fn health() -> Result<impl Responder, ()> {
     Ok("OK")
 }
 
-fn list_papers(papers: web::Data<PapersByHash>) -> Result<impl Responder, ()> {
-    serde_json::to_string_pretty(&papers.keys().collect::<Vec<_>>()).map_err(|_| ())
+fn list_papers(state: web::Data<ServerState>) -> Result<impl Responder, ()> {
+    serde_json::to_string_pretty(&state.papers.keys().collect::<Vec<_>>()).map_err(|_| ())
+}
+
+fn get_paper_page(
+    state: web::Data<ServerState>,
+    path_info: web::Path<(String, usize)>,
+) -> Result<impl Responder, ()> {
+    let paper_hash = path_info.0.clone();
+    let page_num = path_info.1;
+
+    let paper = state.papers.get(&paper_hash).unwrap();
+    let in_path = paper
+        .subject
+        .download_target_path(state.data_dir.to_str().unwrap(), None)
+        .unwrap();
+
+    let document = poppler::PopplerDocument::new_from_file(in_path, "").unwrap();
+
+    let page = document.get_page(page_num).unwrap();
+
+    let mut buf: Vec<u8> = vec![];
+    let image_surface = cairo::ImageSurface::create(cairo::Format::A8, 612 * 3, 792 * 3).unwrap();
+    let mut context = cairo::Context::new(&image_surface);
+    context.scale(3f64, 3f64);
+    page.render(&mut context);
+    image_surface.write_to_png(&mut buf).unwrap();
+
+    let mut response = HttpResponse::with_body(StatusCode::OK, buf.into());
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    Ok(response)
 }
 
 fn run_server(in_file: &mut PaperAnnotations, data_dir: &str) {
-    let papers = in_file.papers_by_hash();
+    let state = ServerState {
+        papers: in_file.papers_by_hash(),
+        data_dir: data_dir.into(),
+    };
     HttpServer::new(move || {
         App::new()
-            .data(papers.clone())
+            .data(state.clone())
             .route("/health", web::get().to(health))
             .route("/api/v1/papers", web::get().to(list_papers))
+            .route(
+                "/api/v1/papers/{paper_id}/page/{page_num}",
+                web::get().to(get_paper_page),
+            )
     })
     .bind("127.0.0.1:8080")
     .unwrap()
@@ -75,6 +121,8 @@ fn read_input_file(path: &str) -> schema::PaperAnnotations {
     serde_json::from_reader(reader).unwrap()
 }
 
+/// Download all papers listed in the `in_file` to the correct destination in `data_dir` if they
+/// don't exist there yet.
 fn download_papers(in_file: &mut PaperAnnotations, data_dir: &str) {
     let client = Client::new();
     for annotation_group in &mut in_file.annotations {
